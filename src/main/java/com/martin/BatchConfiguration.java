@@ -1,9 +1,7 @@
-package com.niraj;
+package com.martin;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-
-import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,13 +14,8 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.partition.support.MultiResourcePartitioner;
 import org.springframework.batch.core.partition.support.Partitioner;
-import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
-import org.springframework.batch.item.database.JdbcBatchItemWriter;
-import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
-import org.springframework.batch.item.file.MultiResourceItemReader;
-import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
-import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
+import org.springframework.batch.item.support.ClassifierCompositeItemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,10 +40,13 @@ public class BatchConfiguration {
 	public StepBuilderFactory stepBuilderFactory;
 
 	@Autowired
-	private JdbcBatchItemWriter<Person> writer;
+	MyClassifier classifier;
 
 	@Autowired
 	private FlatFileItemReader<Person> personItemReader;
+
+	@Autowired
+	FileWriterFactory<Person> writerFactory;
 
 	@Bean("partitioner")
 	@StepScope
@@ -77,12 +73,10 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public JdbcBatchItemWriter<Person> writer(DataSource dataSource) {
-		return new JdbcBatchItemWriterBuilder<Person>()
-				.itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
-				.sql("INSERT INTO people (first_name, last_name) VALUES (:firstName, :lastName)")
-				.dataSource(dataSource)
-				.build();
+	public ClassifierCompositeItemWriter<Person> classifierCompositeItemWriter(){
+		ClassifierCompositeItemWriter<Person> compositeItemWriter = new ClassifierCompositeItemWriter<>();
+		compositeItemWriter.setClassifier(new MyClassifier(writerFactory));
+		return compositeItemWriter;
 	}
 
 	@Bean
@@ -100,7 +94,7 @@ public class BatchConfiguration {
 		return stepBuilderFactory.get("step1")
 				.<Person, Person>chunk(10)
 				.processor(processor())
-				.writer(writer)
+				.writer(classifierCompositeItemWriter())
 				.reader(personItemReader)
 				.build();
 	}
@@ -131,16 +125,10 @@ public class BatchConfiguration {
 	@DependsOn("partitioner")
 	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext['fileName']}") String filename)
 			throws MalformedURLException {
-		log.info("In Reader");
-		return new FlatFileItemReaderBuilder<Person>().name("personItemReader")
-				.delimited()
-				.names(new String[] { "firstName", "lastName" })
-				.fieldSetMapper(new BeanWrapperFieldSetMapper<Person>() {
-					{
-						setTargetType(Person.class);
-					}
-				})
-				.resource(new UrlResource(filename))
-				.build();
+		log.info("In Reader "+filename);
+		FlatFileItemReader<Person> r = new FlatFileItemReader<>();
+		r.setResource(new UrlResource(filename));
+		r.setLineMapper(new PersonMapper(filename));
+		return r;
 	}
 }

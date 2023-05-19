@@ -14,7 +14,12 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.partition.support.MultiResourcePartitioner;
 import org.springframework.batch.core.partition.support.Partitioner;
+import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.FlatFileItemWriter;
+import org.springframework.batch.item.file.LineMapper;
+import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
+import org.springframework.batch.item.file.transform.DelimitedLineAggregator;
 import org.springframework.batch.item.support.ClassifierCompositeItemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -22,6 +27,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -40,43 +47,39 @@ public class BatchConfiguration {
 	public StepBuilderFactory stepBuilderFactory;
 
 	@Autowired
-	MyClassifier classifier;
-
-	@Autowired
 	private FlatFileItemReader<Person> personItemReader;
-
 	@Autowired
-	FileWriterFactory<Person> writerFactory;
+	private FlatFileItemWriter<Person> personItemWriter;
+	@Autowired
+	private ResourcePatternResolver resourcePatternResolver;
+
+	@Value("${output.dir:/tmp}")
+	String location;
+	@Value("${input.dir://home/martin/test-workspace/parallel-file-processor/src/main/resources}")
+	String inputLocation;
+	@Value("${filename.pattern:/*.csv}" )
+	String namePattern;
 
 	@Bean("partitioner")
 	@StepScope
-	public Partitioner partitioner() {
-		log.info("In Partitioner");
-
-		MultiResourcePartitioner partitioner = new MultiResourcePartitioner();
+	public CustomMultiResourcePartitioner partitioner() {
+		CustomMultiResourcePartitioner partitioner
+				= new CustomMultiResourcePartitioner();
 		ResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
-		Resource[] resources = null;
+		Resource[] resources;
 		try {
-			resources = resolver.getResources("/*.csv");
+			resources = resolver.getResources("file://"+inputLocation+namePattern);
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			throw new RuntimeException("I/O problems when resolving"
+					+ " the input file pattern.", e);
 		}
 		partitioner.setResources(resources);
-		partitioner.partition(10);
 		return partitioner;
 	}
 
 	@Bean
 	public PersonItemProcessor processor() {
 		return new PersonItemProcessor();
-	}
-
-	@Bean
-	public ClassifierCompositeItemWriter<Person> classifierCompositeItemWriter(){
-		ClassifierCompositeItemWriter<Person> compositeItemWriter = new ClassifierCompositeItemWriter<>();
-		compositeItemWriter.setClassifier(new MyClassifier(writerFactory));
-		return compositeItemWriter;
 	}
 
 	@Bean
@@ -94,7 +97,7 @@ public class BatchConfiguration {
 		return stepBuilderFactory.get("step1")
 				.<Person, Person>chunk(10)
 				.processor(processor())
-				.writer(classifierCompositeItemWriter())
+				.writer(personItemWriter)
 				.reader(personItemReader)
 				.build();
 	}
@@ -123,12 +126,38 @@ public class BatchConfiguration {
 	@StepScope
 	@Qualifier("personItemReader")
 	@DependsOn("partitioner")
-	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext['fileName']}") String filename)
-			throws MalformedURLException {
+	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext[inputFile]}") String filename) {
 		log.info("In Reader "+filename);
 		FlatFileItemReader<Person> r = new FlatFileItemReader<>();
-		r.setResource(new UrlResource(filename));
-		r.setLineMapper(new PersonMapper(filename));
+		r.setResource(new FileSystemResource(filename));
+		r.setLineMapper((line, lineNumber) -> {
+			String[] parts = line.split(",");
+			return new Person(parts[0], parts[1]);
+		});
 		return r;
+	}
+
+	@Bean
+	@StepScope
+	@Qualifier("personItemWriter")
+	@DependsOn("partitioner")
+	public FlatFileItemWriter<Person> personItemWriter(@Value("#{stepExecutionContext[outputFile]}") String filename) {
+		log.info("In writer "+filename);
+
+		FlatFileItemWriter<Person> f = new FlatFileItemWriter<>();
+		f.setResource(new FileSystemResource(location+"/"+filename));
+		f.setAppendAllowed(true);
+
+		f.setLineAggregator(new DelimitedLineAggregator<Person>() {
+			{
+				setDelimiter(",");
+				setFieldExtractor(new BeanWrapperFieldExtractor<Person>() {
+					{
+						setNames(new String[]{"firstName", "lastName", "value"});
+					}
+				});
+			}
+		});
+		return f;
 	}
 }

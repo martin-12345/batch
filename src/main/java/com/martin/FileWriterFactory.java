@@ -21,7 +21,6 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
-@Component
 public class FileWriterFactory<T> {
 
     @Value("${output.dir:/tmp}")

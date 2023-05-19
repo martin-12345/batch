@@ -1,0 +1,84 @@
+/*
+ *   Copyright (c) 2023 Martin Newstead.  All Rights Reserved.
+ *
+ *   The author makes no representations or warranties about the suitability of the
+ *   software, either express or implied, including but not limited to the
+ *   implied warranties of merchantability, fitness for a particular
+ *   purpose, or non-infringement. The author shall not be liable for any damages
+ *   suffered by licensee as a result of using, modifying or distributing
+ *   this software or its derivatives.
+ */
+package com.martin;
+
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.springframework.batch.core.partition.support.Partitioner;
+import org.springframework.batch.item.ExecutionContext;
+import org.springframework.core.io.Resource;
+import org.springframework.util.Assert;
+
+    public class CustomMultiResourcePartitioner implements Partitioner {
+
+        private static final String DEFAULT_IN_KEY_NAME = "inputFile";
+        private static final String DEFAULT_OUT_KEY_NAME = "outputFile";
+
+        private static final String PARTITION_KEY = "partition";
+
+        private Resource[] resources = new Resource[0];
+
+        private String keyName = DEFAULT_IN_KEY_NAME;
+
+        /**
+         * The resources to assign to each partition. In Spring configuration you
+         * can use a pattern to select multiple resources.
+         * @param resources the resources to use
+         */
+        public void setResources(Resource[] resources) {
+            this.resources = resources;
+        }
+
+        /**
+         * The name of the key for the file name in each {@link ExecutionContext}.
+         * Defaults to "fileName".
+         * @param keyName the value of the key
+         */
+        public void setKeyName(String keyName) {
+            this.keyName = keyName;
+        }
+
+        /**
+         * Assign the filename of each of the injected resources to an
+         * {@link ExecutionContext}.
+         *
+         * @see Partitioner#partition(int)
+         */
+        @Override
+        public Map<String, ExecutionContext> partition(int gridSize) {
+            Map<String, ExecutionContext> map = new HashMap<>(gridSize);
+            int i = 0, k = 1;
+            for (Resource resource : resources) {
+                ExecutionContext context = new ExecutionContext();
+                Assert.state(resource.exists(), "Resource does not exist: " + resource);
+
+                File file = null;
+                try {
+                    file = Paths.get(resource.getURI()).toFile();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                String absolutePath = file.getAbsolutePath();
+
+                context.put(DEFAULT_IN_KEY_NAME, absolutePath);
+                context.putString(DEFAULT_OUT_KEY_NAME, resource.getFilename()+".out");
+
+                map.put(PARTITION_KEY + i, context);
+                i++;
+            }
+            return map;
+        }
+    }

@@ -16,6 +16,7 @@ public class JobCompletionNotificationListener extends JobExecutionListenerSuppo
 	private static final Logger log = LoggerFactory.getLogger(JobCompletionNotificationListener.class);
 
 
+	@Autowired
 	private ThreadPoolTaskExecutor taskExecutor;
 
 

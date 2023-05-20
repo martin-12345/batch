@@ -31,7 +31,6 @@ import java.io.IOException;
 @EnableBatchProcessing
 public class BatchConfiguration {
 
-	private static final Logger log = LoggerFactory.getLogger(BatchConfiguration.class);
 	@Autowired
 	public JobBuilderFactory jobBuilderFactory;
 	@Autowired
@@ -40,15 +39,13 @@ public class BatchConfiguration {
 	private FlatFileItemReader<Person> personItemReader;
 	@Autowired
 	private FlatFileItemWriter<Person> personItemWriter;
-	@Autowired
-	private ResourcePatternResolver resourcePatternResolver;
 
 	@Value("${output.dir:/tmp}")
-	String location;
+	private String location;
 	@Value("${input.dir://home/martin/test-workspace/parallel-file-processor/src/main/resources}")
-	String inputLocation;
+	private String inputLocation;
 	@Value("${filename.pattern:/*.csv}" )
-	String namePattern;
+	private String namePattern;
 
 	/*
 	This bean collects the files and passes then as Resources to the partitioner. The Partitioner
@@ -124,7 +121,6 @@ public class BatchConfiguration {
 	@Qualifier("personItemReader")
 	@DependsOn("partitioner")
 	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext[inputFile]}") String filename) {
-		log.info("In Reader "+filename);
 		FlatFileItemReader<Person> r = new FlatFileItemReader<>();
 		r.setResource(new FileSystemResource(filename));
 		r.setLineMapper((line, lineNumber) -> {
@@ -139,7 +135,6 @@ public class BatchConfiguration {
 	@Qualifier("personItemWriter")
 	@DependsOn("partitioner")
 	public FlatFileItemWriter<Person> personItemWriter(@Value("#{stepExecutionContext[outputFile]}") String filename) {
-		log.info("In writer "+filename);
 
 		FlatFileItemWriter<Person> f = new FlatFileItemWriter<>();
 		f.setResource(new FileSystemResource(location+"/"+filename));
@@ -147,8 +142,8 @@ public class BatchConfiguration {
 
 		/*
 		Gets passed an object, in this case a Person object and the LineAggregator extracts the attribute listed
-		in the setNames below (by calling the getters), aggregates the values, separated by comma, the delimiter,
-		and the FileWriter writes the line to the output file.
+		in the setNames below (by calling the getters by means of the BeanWrapperFieldExtractor), aggregates the
+		values, separated by comma, the delimiter, and the FileWriter writes the line to the output file.
 		 */
 		f.setLineAggregator(new DelimitedLineAggregator<Person>() {
 			{

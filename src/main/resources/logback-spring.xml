@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<appender name="Console"
+		class="ch.qos.logback.core.ConsoleAppender">
+		<layout class="ch.qos.logback.classic.PatternLayout">
+			<Pattern>
+				%d{HH:mm:ss} %-5level %class{5}.java:%L - %msg%n
+			</Pattern>
+		</layout>
+	</appender>
+	<root level="INFO">
+		<appender-ref ref="Console" />
+	</root>
+	<logger name="org.springframework" level="WARN" />
+	<logger name="com.zaxxer.hikari" level="WARN" />
+
+	<logger name="com.martin.PersonItemProcessor" level="WARN" />
+</configuration>

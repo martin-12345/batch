@@ -34,10 +34,8 @@ public class BatchConfiguration {
 	private static final Logger log = LoggerFactory.getLogger(BatchConfiguration.class);
 	@Autowired
 	public JobBuilderFactory jobBuilderFactory;
-
 	@Autowired
 	public StepBuilderFactory stepBuilderFactory;
-
 	@Autowired
 	private FlatFileItemReader<Person> personItemReader;
 	@Autowired
@@ -52,6 +50,11 @@ public class BatchConfiguration {
 	@Value("${filename.pattern:/*.csv}" )
 	String namePattern;
 
+	/*
+	This bean collects the files and passes then as Resources to the partitioner. The Partitioner
+	is used in the MasterStep to invoke a sub-step in a new thread to process one file. Each step has its
+	own copy of the Reader and Writer. Thus, multiple threads can process discreet files simultaneously.
+	 */
 	@Bean("partitioner")
 	@StepScope
 	public CustomMultiResourcePartitioner partitioner() {
@@ -75,7 +78,7 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Job importUserJob(JobCompletionNotificationListener listener, Step step1) {
+	public Job importUserJob(JobCompletionNotificationListener listener) {
 		return jobBuilderFactory.get("importUserJob")
 				.incrementer(new RunIdIncrementer())
 				.listener(listener)
@@ -85,8 +88,10 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	public Step step1() {
-		return stepBuilderFactory.get("step1")
+	@Qualifier("subStep")
+	public Step subStep() {
+
+		return stepBuilderFactory.get("subStep")
 				.<Person, Person>chunk(10)
 				.processor(processor())
 				.writer(personItemWriter)
@@ -108,8 +113,8 @@ public class BatchConfiguration {
 	@Qualifier("masterStep")
 	public Step masterStep() {
 		return stepBuilderFactory.get("masterStep")
-				.partitioner("step1", partitioner())
-				.step(step1())
+				.partitioner("subStep", partitioner())
+				.step(subStep())
 				.taskExecutor(taskExecutor())
 				.build();
 	}
@@ -140,6 +145,11 @@ public class BatchConfiguration {
 		f.setResource(new FileSystemResource(location+"/"+filename));
 		f.setAppendAllowed(true);
 
+		/*
+		Gets passed an object, in this case a Person object and the LineAggregator extracts the attribute listed
+		in the setNames below (by calling the getters), aggregates the values, separated by comma, the delimiter,
+		and the FileWriter writes the line to the output file.
+		 */
 		f.setLineAggregator(new DelimitedLineAggregator<Person>() {
 			{
 				setDelimiter(",");

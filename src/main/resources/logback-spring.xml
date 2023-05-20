@@ -15,4 +15,5 @@
 	<logger name="com.zaxxer.hikari" level="WARN" />
 
 	<logger name="com.martin.PersonItemProcessor" level="WARN" />
+	<logger name="com.martin.FileCallbackHandler" level="DEBUG" />
 </configuration>

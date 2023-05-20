@@ -63,12 +63,20 @@ public class CustomMultiResourcePartitioner implements Partitioner {
             }
             String absolutePath = file.getAbsolutePath();
 
+            /*
+            Stores the absolute path/name of the input file in the context but just the filename of the output
+            file. The location and any additional suffix is added by the FileWriter
+             */
             context.put(DEFAULT_IN_KEY_NAME, absolutePath);
-            context.putString(DEFAULT_OUT_KEY_NAME, resource.getFilename() + ".out");
+            context.putString(DEFAULT_OUT_KEY_NAME, filename(resource.getFilename()));
 
             map.put(PARTITION_KEY + i, context);
             i++;
         }
         return map;
+    }
+
+    private String filename(String filename) {
+        return filename.replaceAll("\\.csv$","-out.csv" );
     }
 }

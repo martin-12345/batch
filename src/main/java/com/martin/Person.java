@@ -25,7 +25,6 @@ public class Person {
         this.lastName = lastName;
     }
 
-
     public void setFirstName(String firstName) {
         this.firstName = firstName;
     }
@@ -50,6 +49,4 @@ public class Person {
     public String getFilename() {
         return filename;
     }
-
-
 }

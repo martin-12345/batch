@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
@@ -13,6 +15,9 @@ import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.file.FlatFileHeaderCallback;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.FlatFileItemWriter;
+import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.batch.item.file.builder.FlatFileItemWriterBuilder;
+import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
 import org.springframework.batch.item.file.transform.DelimitedLineAggregator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -81,7 +86,7 @@ public class BatchConfiguration {
 
 	@Bean
 	@StepScope
-	public FileCallbackHandler headerCallback(){
+	public FileCallbackHandler headerLineCallback(){
 		return new FileCallbackHandler(location);
 	}
 
@@ -96,6 +101,16 @@ public class BatchConfiguration {
 	}
 
 	@Bean
+	@Qualifier("masterStep")
+	public Step masterStep() {
+		return stepBuilderFactory.get("masterStep")
+				.partitioner("subStep", partitioner())
+				.step(subStep())
+				.taskExecutor(taskExecutor())
+				.build();
+	}
+
+	@Bean
 	@Qualifier("subStep")
 	public Step subStep() {
 
@@ -104,7 +119,7 @@ public class BatchConfiguration {
 				.reader(personItemReader)
 				.processor(processor())
 				.writer(personItemWriter)
-				.listener(headerCallback())
+				.listener(headerLineCallback())
 				.build();
 	}
 
@@ -119,32 +134,23 @@ public class BatchConfiguration {
 	}
 
 	@Bean
-	@Qualifier("masterStep")
-	public Step masterStep() {
-		return stepBuilderFactory.get("masterStep")
-				.partitioner("subStep", partitioner())
-				.step(subStep())
-				.taskExecutor(taskExecutor())
-				.build();
-	}
-
-	@Bean
 	@StepScope
 	@Qualifier("personItemReader")
 	@DependsOn("partitioner")
 	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext[inputFile]}") String filename) {
 
-		FlatFileItemReader<Person> r = new FlatFileItemReader<>();
-		r.setResource(new FileSystemResource(filename));
-		r.setLinesToSkip(1);
-		r.setSkippedLinesCallback(headerCallback());
-		r.setLineMapper((line, lineNumber) -> {
-			String[] parts = line.split(",");
-			return new Person(parts[0], parts[1]);
-		});
-		return r;
+		return new FlatFileItemReaderBuilder<Person>()
+				.name("personItemReader")
+				.resource(new FileSystemResource(filename))
+				.delimited()
+				.names("firstName", "lastName")
+				.fieldSetMapper(new BeanWrapperFieldSetMapper<Person>() {{
+					setTargetType(Person.class);
+				}})
+				.linesToSkip(1)
+				.skippedLinesCallback(headerLineCallback())
+				.build();
 	}
-
 
 	@Bean
 	@StepScope
@@ -152,27 +158,26 @@ public class BatchConfiguration {
 	@DependsOn("partitioner")
 	public FlatFileItemWriter<Person> personItemWriter(@Value("#{stepExecutionContext[header]}") String header, @Value("#{stepExecutionContext[outputFile]}") String filename) {
 
-		FlatFileItemWriter<Person> f = new FlatFileItemWriter<>();
-		f.setResource(new FileSystemResource(location+"/"+filename));
-		f.setAppendAllowed(true);
-		f.setHeaderCallback(outputHeaderCallback(header));
-
-        /*
-		Gets passed an object, in this case a Person object and the LineAggregator extracts the attribute listed
-		in the setNames below (by calling the getters by means of the BeanWrapperFieldExtractor), aggregates the
-		values, separated by comma, the delimiter, and the FileWriter writes the line to the output file.
-		 */
-		f.setLineAggregator(new DelimitedLineAggregator<Person>() {
-			{
-				setDelimiter(",");
-				setFieldExtractor(new BeanWrapperFieldExtractor<Person>() {
+		return new FlatFileItemWriterBuilder<Person>()
+				.name("personItemWriter")
+				.resource(new FileSystemResource(location + "/" + filename))
+				.append(true)
+				.headerCallback(outputHeaderCallback(header))
+				.lineAggregator(new DelimitedLineAggregator<Person>() {
+					/*
+                    Gets passed an object, in this case a Person object and the LineAggregator extracts the attribute listed
+                    in the setNames below (by calling the getters by means of the BeanWrapperFieldExtractor), aggregates the
+                    values, separated by comma, the delimiter, and the FileWriter writes the line to the output file.
+                     */
 					{
-						setNames(new String[]{"firstName", "lastName", "value"});
+						setDelimiter(",");
+						setFieldExtractor(new BeanWrapperFieldExtractor<Person>() {
+							{
+								setNames(new String[]{"firstName", "lastName", "value"});
+							}
+						});
 					}
-				});
-			}
-		});
-		return f;
+				}).build();
 	}
 
 	public FlatFileHeaderCallback outputHeaderCallback(String header) {

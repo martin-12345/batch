@@ -11,24 +11,16 @@
 package com.martin;
 
 import org.springframework.batch.item.file.FlatFileItemReader;
-import org.springframework.core.io.FileSystemResource;
 
 public class HeaderValidatingFileItemReader<T> extends FlatFileItemReader<T> {
     private boolean headerError = false;
-
-    public HeaderValidatingFileItemReader(String filename, FileCallbackHandler callback) {
-        super();
-        setResource(new FileSystemResource(filename));
-        setLinesToSkip(1);
-        setSkippedLinesCallback(callback);
-    }
 
     @Override
     protected void doOpen() throws Exception {
         try {
             super.doOpen();
         } catch(PersonFileHeaderException e) {
-            //headerError = true;
+            headerError = true;
         }
     }
     protected T doRead() throws Exception {

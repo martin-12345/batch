@@ -22,8 +22,7 @@ public class FileCallbackHandler implements LineCallbackHandler , StepExecutionL
     private static final Logger logger = LoggerFactory.getLogger(FileCallbackHandler.class);
     private final String outputLocation;
 
-    private String emailAddr;
-    ExecutionContext c;
+    private ExecutionContext c;
 
     public FileCallbackHandler(String outputLocation) {
         this.outputLocation = outputLocation;
@@ -32,7 +31,8 @@ public class FileCallbackHandler implements LineCallbackHandler , StepExecutionL
     @Override
     public void handleLine(String line) {
         if(line.startsWith("email:")){
-            emailAddr = line.trim().substring(6);
+            String emailAddr = line.trim().substring(6);
+            c.put("email", emailAddr);
         }
         c.put("header", line);
     }
@@ -46,13 +46,14 @@ public class FileCallbackHandler implements LineCallbackHandler , StepExecutionL
     public ExitStatus afterStep(StepExecution stepExecution) {
 
         String fileName = (String) c.get("outputFile");
+        String email = (String) c.get("email");
 
-        if(stepExecution.getExitStatus().equals(ExitStatus.COMPLETED) && emailAddr!=null) {
+        if(stepExecution.getExitStatus().equals(ExitStatus.COMPLETED) && email!=null) {
 
-            logger.debug("Send email to {} saying file {} is ready.", emailAddr, outputLocation+ File.separator+fileName);
+            logger.info("Send email to {} saying file {} is ready.", email, outputLocation+ File.separator+fileName);
         }
 
-        if(emailAddr == null) {
+        if(email == null) {
             logger.error("No header/email address in file {}", fileName);
         }
 

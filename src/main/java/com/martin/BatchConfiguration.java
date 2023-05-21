@@ -11,6 +11,7 @@ import org.springframework.batch.core.configuration.annotation.JobBuilderFactory
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.file.FlatFileHeaderCallback;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -95,9 +96,26 @@ public class BatchConfiguration {
 		return jobBuilderFactory.get("importUserJob")
 				.incrementer(new RunIdIncrementer())
 				.listener(listener)
-				.flow(masterStep())
-				.end()
+				.start(initialStep())
+				.next(masterStep())
 				.build();
+	}
+
+	@Bean
+	public Step initialStep(){
+		return stepBuilderFactory.get("initialStep")
+				.tasklet(fileDeletingTasklet())
+				.build();
+	}
+
+
+	@Bean
+	public FileDeletingTasklet fileDeletingTasklet() {
+		FileDeletingTasklet tasklet = new FileDeletingTasklet();
+
+		tasklet.setDirectoryResource(location, namePattern);
+
+		return tasklet;
 	}
 
 	@Bean

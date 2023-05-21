@@ -9,6 +9,8 @@ import org.springframework.batch.core.configuration.annotation.JobBuilderFactory
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.item.ExecutionContext;
+import org.springframework.batch.item.file.FlatFileHeaderCallback;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.FlatFileItemWriter;
 import org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor;
@@ -130,9 +132,12 @@ public class BatchConfiguration {
 	@StepScope
 	@Qualifier("personItemReader")
 	@DependsOn("partitioner")
-	public HeaderValidatingFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext[inputFile]}") String filename) {
+	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext[inputFile]}") String filename) {
 
-		HeaderValidatingFileItemReader<Person> r = new HeaderValidatingFileItemReader<>(filename, headerCallback());
+		FlatFileItemReader<Person> r = new FlatFileItemReader<>();
+		r.setResource(new FileSystemResource(filename));
+		r.setLinesToSkip(1);
+		r.setSkippedLinesCallback(headerCallback());
 		r.setLineMapper((line, lineNumber) -> {
 			String[] parts = line.split(",");
 			return new Person(parts[0], parts[1]);
@@ -145,11 +150,12 @@ public class BatchConfiguration {
 	@StepScope
 	@Qualifier("personItemWriter")
 	@DependsOn("partitioner")
-	public FlatFileItemWriter<Person> personItemWriter(@Value("#{stepExecutionContext[outputFile]}") String filename) {
+	public FlatFileItemWriter<Person> personItemWriter(@Value("#{stepExecutionContext[header]}") String header, @Value("#{stepExecutionContext[outputFile]}") String filename) {
 
 		FlatFileItemWriter<Person> f = new FlatFileItemWriter<>();
 		f.setResource(new FileSystemResource(location+"/"+filename));
 		f.setAppendAllowed(true);
+		f.setHeaderCallback(outputHeaderCallback(header));
 
         /*
 		Gets passed an object, in this case a Person object and the LineAggregator extracts the attribute listed
@@ -167,5 +173,9 @@ public class BatchConfiguration {
 			}
 		});
 		return f;
+	}
+
+	public FlatFileHeaderCallback outputHeaderCallback(String header) {
+		return new OutputHeaderCallback(header);
 	}
 }

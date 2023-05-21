@@ -31,10 +31,10 @@ public class FileCallbackHandler implements LineCallbackHandler , StepExecutionL
 
     @Override
     public void handleLine(String line) {
-        if(!line.startsWith("email:")){
-            throw new PersonFileHeaderException();
+        if(line.startsWith("email:")){
+            emailAddr = line.trim().substring(6);
         }
-        emailAddr = line.trim();
+        c.put("header", line);
     }
 
     @Override
@@ -49,11 +49,11 @@ public class FileCallbackHandler implements LineCallbackHandler , StepExecutionL
 
         if(stepExecution.getExitStatus().equals(ExitStatus.COMPLETED) && emailAddr!=null) {
 
-            logger.debug(" send email to {} saying file {} is ready.", emailAddr, outputLocation+ File.separator+fileName);
+            logger.debug("Send email to {} saying file {} is ready.", emailAddr, outputLocation+ File.separator+fileName);
         }
 
         if(emailAddr == null) {
-            logger.error("no header/email address in file {}", fileName);
+            logger.error("No header/email address in file {}", fileName);
         }
 
         return ExitStatus.COMPLETED;

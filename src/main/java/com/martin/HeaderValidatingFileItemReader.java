@@ -28,7 +28,7 @@ public class HeaderValidatingFileItemReader<T> extends FlatFileItemReader<T> {
         try {
             super.doOpen();
         } catch(PersonFileHeaderException e) {
-            headerError = true;
+            //headerError = true;
         }
     }
     protected T doRead() throws Exception {

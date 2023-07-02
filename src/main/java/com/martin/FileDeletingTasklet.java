@@ -30,9 +30,9 @@ public class FileDeletingTasklet implements Tasklet {
 
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-        try (DirectoryStream<Path> dirStream = Files.newDirectoryStream(
+        try (DirectoryStream<Path> fileStream = Files.newDirectoryStream(
                 Paths.get(location), pattern)) {
-            dirStream.forEach(path -> {
+            fileStream.forEach(path -> {
                 if(Files.isRegularFile(path)) {
                     try {
                         Files.delete(path);

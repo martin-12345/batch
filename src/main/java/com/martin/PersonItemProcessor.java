@@ -5,10 +5,19 @@ import org.slf4j.LoggerFactory;
 
 import org.springframework.batch.item.ItemProcessor;
 
+/**
+ * An ItemProcessor to process a Person item.
+ */
 public class PersonItemProcessor implements ItemProcessor<Person, Person> {
 
     private static final Logger log = LoggerFactory.getLogger(PersonItemProcessor.class);
 
+    /**
+     * Processes a Person
+     * @param person to be processed, never {@code null}.
+     * @return another Person object, processed in this simple example by setting the Value
+     * attribute to the word 'Processed'
+     */
     @Override
     public Person process(final Person person) {
         final String firstName = person.getFirstName().toUpperCase();

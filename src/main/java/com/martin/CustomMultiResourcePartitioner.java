@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class CustomMultiResourcePartitioner implements Partitioner {
 
@@ -65,10 +66,11 @@ public class CustomMultiResourcePartitioner implements Partitioner {
 
             /*
             Stores the absolute path/name of the input file in the context but just the filename of the output
-            file. The location and any additional suffix is added by the FileWriter
+            file.
              */
             context.put(DEFAULT_IN_KEY_NAME, absolutePath);
-            context.putString(DEFAULT_OUT_KEY_NAME, filename(resource.getFilename()));
+            /* Store the output filename */
+            context.putString(DEFAULT_OUT_KEY_NAME, filename(Objects.requireNonNull(resource.getFilename())));
 
             map.put(PARTITION_KEY + i, context);
             i++;
@@ -76,6 +78,11 @@ public class CustomMultiResourcePartitioner implements Partitioner {
         return map;
     }
 
+    /**
+     * Builds the output filename based on the input filename
+     * @param filename the input filename
+     * @return the output filename
+     */
     private String filename(String filename) {
         return filename.replaceAll("\\.csv$","-out.csv" );
     }

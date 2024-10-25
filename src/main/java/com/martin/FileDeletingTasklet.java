@@ -33,7 +33,7 @@ public class FileDeletingTasklet implements Tasklet {
         try (DirectoryStream<Path> fileStream = Files.newDirectoryStream(
                 Paths.get(location), pattern)) {
             fileStream.forEach(path -> {
-                if(Files.isRegularFile(path)) {
+                if (Files.isRegularFile(path)) {
                     try {
                         Files.delete(path);
                         log.debug("deleted {}", path);

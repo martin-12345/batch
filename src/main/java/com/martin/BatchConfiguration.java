@@ -128,7 +128,7 @@ public class BatchConfiguration {
 	public Step subStep() {
 
 		return stepBuilderFactory.get("subStep")
-				.<Person, Person>chunk(10)
+				.<Person, Person>chunk(100)
 				.reader(personItemReader)
 				.processor(processor())
 				.writer(personItemWriter)

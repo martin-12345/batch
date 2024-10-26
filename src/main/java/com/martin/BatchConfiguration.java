@@ -9,6 +9,7 @@ import org.springframework.batch.core.configuration.annotation.JobBuilderFactory
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.core.partition.support.Partitioner;
 import org.springframework.batch.item.file.FlatFileHeaderCallback;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.FlatFileItemWriter;
@@ -45,12 +46,6 @@ public class BatchConfiguration {
 	@Autowired
 	private FlatFileItemWriter<Person> personItemWriter;
 
-	@Value("${output.dir:/tmp}")
-	private String location;
-	@Value("${input.dir:/home/martin/test-workspace/parallel-file-processor/src/main/resources}")
-	private String inputLocation;
-	@Value("${filename.pattern:*.csv}" )
-	private String namePattern;
 
 	private static final Logger logger = LoggerFactory.getLogger(BatchConfiguration.class);
 
@@ -61,7 +56,8 @@ public class BatchConfiguration {
      */
 	@Bean("partitioner")
 	@StepScope
-	public CustomMultiResourcePartitioner partitioner() {
+	public CustomMultiResourcePartitioner partitioner(@Value("#{jobParameters['input.dir']}")String inputLocation,
+													  @Value("#{jobParameters['filename.pattern']}")String namePattern) {
 		CustomMultiResourcePartitioner partitioner
 				= new CustomMultiResourcePartitioner();
 		ResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
@@ -83,32 +79,34 @@ public class BatchConfiguration {
 
 	@Bean
 	@StepScope
-	public FileCallbackHandler headerLineCallback(){
+	public FileCallbackHandler headerLineCallback(@Value("#{jobParameters['output.dir']}")String location){
 		return new FileCallbackHandler(location);
 	}
 
 	@Bean
-	public Job importUserJob(JobNotificationListener listener) {
+	public Job importUserJob(JobNotificationListener listener, Step initialStep, Step masterStep) {
 		return jobBuilderFactory.get("importUserJob")
 				.incrementer(new RunIdIncrementer())
 				.listener(listener)
-				.start(initialStep())
-				.next(masterStep())
+				.start(initialStep)
+				.next(masterStep)
 				.build();
 	}
 
 	@Bean
-	public Step initialStep(){
+	public Step initialStep(FileDeletingTasklet fileDeletingTasklet){
 		return stepBuilderFactory.get("initialStep")
-				.tasklet(fileDeletingTasklet())
+				.tasklet(fileDeletingTasklet)
 				.build();
 	}
 
 
 	@Bean
-	public FileDeletingTasklet fileDeletingTasklet() {
-		FileDeletingTasklet tasklet = new FileDeletingTasklet();
+	@StepScope
+	public FileDeletingTasklet fileDeletingTasklet(@Value("#{jobParameters['output.dir']}")String location,
+												   @Value("#{jobParameters['filename.pattern']}")String namePattern) {
 
+		FileDeletingTasklet tasklet = new FileDeletingTasklet();
 		tasklet.setDirectoryResource(location, namePattern);
 
 		return tasklet;
@@ -116,23 +114,23 @@ public class BatchConfiguration {
 
 	@Bean
 	@Qualifier("masterStep")
-	public Step masterStep() {
+	public Step masterStep(Step subStep, Partitioner partitioner) {
 		return stepBuilderFactory.get("masterStep")
-				.partitioner("subStep", partitioner())
-				.step(subStep())
+				.partitioner("subStep", partitioner)
+				.step(subStep)
 				.taskExecutor(taskExecutor())
 				.build();
 	}
 	@Bean
 	@Qualifier("subStep")
-	public Step subStep() {
+	public Step subStep(FileCallbackHandler headerLineCallback) {
 
 		return stepBuilderFactory.get("subStep")
-				.<Person, Person>chunk(100)
+				.<Person, Person>chunk(10)
 				.reader(personItemReader)
 				.processor(processor())
 				.writer(personItemWriter)
-				.listener(headerLineCallback())
+				.listener(headerLineCallback)
 				.build();
 	}
 
@@ -150,7 +148,11 @@ public class BatchConfiguration {
 	@StepScope
 	@Qualifier("personItemReader")
 	@DependsOn("partitioner")
-	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext[inputFile]}") String filename) {
+	public FlatFileItemReader<Person> personItemReader(@Value("#{stepExecutionContext[inputFile]}") String filename,
+													   FileCallbackHandler headerLineCallback) {
+		/* the input filename is placed in the stepExecutionContext by the partitioner as it locates the input files
+		and passed them to a new instance of this step
+		 */
 
 		return new FlatFileItemReaderBuilder<Person>()
 				.name("personItemReader")
@@ -161,7 +163,7 @@ public class BatchConfiguration {
 					setTargetType(Person.class);
 				}})
 				.linesToSkip(1)
-				.skippedLinesCallback(headerLineCallback())
+				.skippedLinesCallback(headerLineCallback)
 				.build();
 	}
 
@@ -169,7 +171,9 @@ public class BatchConfiguration {
 	@StepScope
 	@Qualifier("personItemWriter")
 	@DependsOn("partitioner")
-	public FlatFileItemWriter<Person> personItemWriter(@Value("#{stepExecutionContext[header]}") String header, @Value("#{stepExecutionContext[outputFile]}") String filename) {
+	public FlatFileItemWriter<Person> personItemWriter(@Value("#{stepExecutionContext[header]}") String header,
+													   @Value("#{stepExecutionContext[outputFile]}") String filename,
+													   @Value("#{jobParameters['output.dir']}")String location) {
 
 		return new FlatFileItemWriterBuilder<Person>()
 				.name("personItemWriter")

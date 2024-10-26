@@ -28,6 +28,7 @@ public class Application implements ApplicationRunner {
 
         JobParametersBuilder jobParametersBuilder = new JobParametersBuilder();
 
+        /* Copy the command line args to the jobParameters */
         for (String v : args.getSourceArgs()) {
             String[] parts=v.split("=");
             String name = parts[0];
